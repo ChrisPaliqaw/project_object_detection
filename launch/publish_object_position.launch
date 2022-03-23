@@ -1,0 +1,4 @@
+<launch>
+	<node pkg="project_object_detection" type="get_objects_position.py" name="$(anon get_objects_position)" output="screen">
+	</node>
+</launch>
