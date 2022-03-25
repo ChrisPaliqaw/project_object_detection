@@ -89,8 +89,11 @@ class GetObjectsPosition():
         rospy.on_shutdown(self.__shutdownhook)
         self._br = tf2_ros.TransformBroadcaster()
         self._graspable_pub = rospy.Publisher(GetObjectsPosition.GRASPABLE_OBJECT_TOPIC_NAME, Pose, queue_size=10)
-    
+        self._marker = None
+
     def __surface_objects_callback(self, marker: Marker):
+        if self._marker is not None:
+            return
         p = re.compile(r"surface_\d*_object_\d*_axes")
         y = marker.pose.position.y
         height = marker.pose.position.z
@@ -101,28 +104,36 @@ class GetObjectsPosition():
             (abs(y - GetObjectsPosition.EXPECTED_OBJECT_Y) < \
                 GetObjectsPosition.Y_FUZZ):
             status = "Accepted"
+            self._marker = marker
             self.__publish_graspable_object(marker)
+            self._surface_objects_sub.unregister()
         else:
             status = "Rejected"
         rospy.logdebug(f"{status}: {marker.ns=} {height=} {marker.type=} {y=}")
     
     def __publish_graspable_object(self, marker: Marker):
-        t = TransformStamped()
-        t.header.stamp = rospy.Time.now()
-        t.header.frame_id = GetObjectsPosition.GRASPABLE_OBJECT_PARENT_FRAME
-        t.child_frame_id = GetObjectsPosition.GRASPABLE_OBJECT_NAME
         
-        t.transform.translation = marker.pose.position
-        t.transform.rotation = marker.pose.orientation
+        
+        
 
-        rospy.loginfo(f"Publish transform: {t}")
-        
-        self._br.sendTransform(t)
-        p = marker.pose
-        self._graspable_pub.publish(p)
+        while not self._ctrl_c:
+            t = TransformStamped()
+            t.header.stamp = rospy.Time.now()
+            t.header.frame_id = GetObjectsPosition.GRASPABLE_OBJECT_PARENT_FRAME
+            t.child_frame_id = GetObjectsPosition.GRASPABLE_OBJECT_NAME
+            
+            t.transform.translation = marker.pose.position
+            t.transform.rotation = marker.pose.orientation
+
+            rospy.loginfo(f"Publish transform: {t}")
+            
+            self._br.sendTransform(t)
+            p = marker.pose
+            self._graspable_pub.publish(p)
+            rospy.sleep(1)
 
     def __shutdownhook(self):
-        self.ctrl_c = True
+        self._ctrl_c = True
             
 if __name__ == '__main__':
     rospy.init_node("get_objects_position", anonymous=True, log_level=rospy.DEBUG)
